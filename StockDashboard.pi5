@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Stock Dashboard
+Comment=Launch the Stock Portfolio Dashboard
+Exec=python3 /home/pi5/Programs/stocks.py
+Icon=utilities-terminal
+Terminal=false
+Type=Application
+Categories=Utility;
+
