@@ -7,7 +7,7 @@ async function load(prices=true) {
   holdings = prices ? d.holdings : d;
   document.querySelector("#summary").textContent = prices ? `Value: ${money(d.totalValue)} · P/L: ${money(d.totalProfitLoss)}` : "Holdings loaded";
   if (prices) drawPie(holdings); else document.querySelector("#pie").innerHTML = "";
-  document.querySelector("tbody").innerHTML = holdings.map((x,i)=>`<tr><td>${x.symbol}</td><td>${x.shares}</td><td>${money(x.cost)}</td><td>${prices?money(x.price):"—"}</td><td>${prices?money(x.value):"—"}</td><td>${prices?money(x.profitLoss):"—"}</td><td><button onclick="removeHolding(${i})">Delete</button></td></tr>`).join("");
+  document.querySelector("tbody").innerHTML = holdings.map((x,i)=>`<tr><td><a href="#" class="sym" onclick="showInfo('${x.symbol}');return false">${x.symbol}</a></td><td>${x.shares}</td><td>${money(x.cost)}</td><td>${prices?money(x.price):"—"}</td><td>${prices?money(x.value):"—"}</td><td>${prices?money(x.profitLoss):"—"}</td><td><button onclick="removeHolding(${i})">Delete</button></td></tr>`).join("");
 }
 const COLORS = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
 function drawPie(rows) {
@@ -24,6 +24,19 @@ function drawPie(rows) {
     a = b;
   });
   document.querySelector("#pie").innerHTML = `<svg viewBox="0 0 300 300">${out}</svg>`;
+}
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = u => /^https?:\/\//i.test(u) ? esc(u) : "#";
+async function showInfo(symbol) {
+  const box = document.querySelector("#info");
+  box.innerHTML = `<p>Loading news for ${esc(symbol)}…</p>`;
+  try {
+    const d = await (await fetch(`${API}/company?symbol=${encodeURIComponent(symbol)}`)).json();
+    const logo = d.logo ? `<img src="${safeUrl(d.logo)}" alt="${esc(symbol)} logo">` : "<div class=\"nologo\">No Logo Available</div>";
+    const site = d.website ? `<a href="${safeUrl(d.website)}" target="_blank" rel="noopener">Visit Company Website</a>` : "Website not available";
+    const news = d.news.length ? d.news.map(n => `<li><a href="${safeUrl(n.url)}" target="_blank" rel="noopener">${esc(n.headline)}</a></li>`).join("") : "<li>No news articles found.</li>";
+    box.innerHTML = `<div class="infobox"><div class="logo">${logo}<div>${site}</div></div><div><h3>News for ${esc(symbol)}${d.name ? " – " + esc(d.name) : ""}</h3><ul>${news}</ul></div></div>`;
+  } catch (e) { box.innerHTML = `<p>Error fetching news: ${esc(e.message)}</p>`; }
 }
 async function save(){await fetch(`${API}/holdings`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(holdings)}); await load();}
 document.querySelector("#form").onsubmit=async e=>{e.preventDefault(); let s=symbol.value.toUpperCase(), x={symbol:s,shares:+shares.value,cost:+cost.value}; let i=holdings.findIndex(h=>h.symbol===s); if(i<0) holdings.push(x); else holdings[i]=x; e.target.reset(); await save();};

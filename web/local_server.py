@@ -37,6 +37,28 @@ def enrich(stock):
     return {**stock, "symbol": symbol, "price": price, "value": price * shares, "profitLoss": (price - cost) * shares}
 
 
+def company(symbol):
+    import datetime
+    today = datetime.date.today()
+    params = {"symbol": symbol, "from": str(today - datetime.timedelta(days=7)), "to": str(today)}
+    news = finnhub_params("company-news", params)
+    profile = finnhub("stock/profile2", symbol)
+    articles = [{"headline": a.get("headline", "No Title"), "url": a.get("url", "")}
+                for a in (news if isinstance(news, list) else [])[:5] if a.get("headline") and a.get("url")]
+    return {"symbol": symbol, "name": profile.get("name"), "logo": profile.get("logo"), "website": profile.get("weburl"), "news": articles}
+
+
+def finnhub_params(endpoint, params):
+    if not KEY:
+        return {}
+    qs = urllib.parse.urlencode({**params, "token": KEY})
+    try:
+        with urllib.request.urlopen(f"https://finnhub.io/api/v1/{endpoint}?{qs}", timeout=8) as r:
+            return json.load(r)
+    except Exception:
+        return {}
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=SITE, **kw)
@@ -56,6 +78,9 @@ class Handler(SimpleHTTPRequestHandler):
             rows = [enrich(x) for x in load()]
             return self.send_json(200, {"holdings": rows, "totalValue": sum(x["value"] for x in rows),
                                         "totalProfitLoss": sum(x["profitLoss"] for x in rows)})
+        if self.path.startswith("/company"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            return self.send_json(200, company(q.get("symbol", [""])[0].upper()))
         super().do_GET()
 
     def do_PUT(self):

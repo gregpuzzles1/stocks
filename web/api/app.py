@@ -1,5 +1,5 @@
 """Lambda API for the public personal stock dashboard."""
-import json, os, urllib.parse
+import json, os, datetime, urllib.parse
 import boto3, requests
 
 TABLE = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
@@ -21,6 +21,13 @@ def enrich(stock):
     shares, cost = float(stock["shares"]), float(stock["cost"])
     return {**stock, "symbol": symbol, "price": price, "open": quote.get("o"), "high": quote.get("h"), "low": quote.get("l"), "previousClose": quote.get("pc"), "value": price * shares, "profitLoss": (price-cost)*shares, "exchange": profile.get("exchange"), "industry": profile.get("finnhubIndustry"), "logo": profile.get("logo"), "website": profile.get("weburl")}
 
+def company(symbol):
+    today = datetime.date.today()
+    news = requests.get("https://finnhub.io/api/v1/company-news", params={"symbol": symbol, "from": str(today - datetime.timedelta(days=7)), "to": str(today), "token": KEY}, timeout=8).json()
+    profile = requests.get("https://finnhub.io/api/v1/stock/profile2", params={"symbol": symbol, "token": KEY}, timeout=8).json()
+    articles = [{"headline": a.get("headline"), "url": a.get("url")} for a in (news if isinstance(news, list) else [])[:5] if a.get("headline") and a.get("url")]
+    return {"symbol": symbol, "name": profile.get("name"), "logo": profile.get("logo"), "website": profile.get("weburl"), "news": articles}
+
 def lambda_handler(event, context):
     method = event["requestContext"]["http"]["method"]
     path = event.get("rawPath", "")
@@ -30,6 +37,9 @@ def lambda_handler(event, context):
         if method == "GET" and path.endswith("/portfolio"):
             rows = [enrich(x) for x in holdings()]
             return response(200, {"holdings": rows, "totalValue": sum(x["value"] for x in rows), "totalProfitLoss": sum(x["profitLoss"] for x in rows)})
+        if method == "GET" and path.endswith("/company"):
+            symbol = (event.get("queryStringParameters") or {}).get("symbol", "").upper()
+            return response(200, company(symbol))
         if method in ("PUT", "POST") and path.endswith("/holdings"):
             data = json.loads(event.get("body") or "[]")
             if not isinstance(data, list): return response(400, {"error": "Expected a list of holdings"})
