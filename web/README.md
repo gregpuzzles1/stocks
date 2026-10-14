@@ -2,6 +2,14 @@
 
 This page is intentionally public: anyone with its link can view and change the portfolio.
 
+## Contents
+
+- `site/`: the web page, with the holdings table, add/update form and pie chart.
+- `local_server.py`: a local server that serves the page and stores holdings in `web/holdings.json`.
+- `api/`: the Lambda backend for AWS.
+- `infra/`: the CDK code that deploys the page and the backend to AWS.
+- `README.md`: deploy notes.
+
 ## Deploy
 
 1. Create a Finnhub API key and keep it private.
