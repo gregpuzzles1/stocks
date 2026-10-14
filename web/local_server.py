@@ -97,5 +97,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print("http://localhost:8000")
-    ThreadingHTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
+    host = os.environ.get("HOST", "127.0.0.1")
+    print(f"http://localhost:8000 (listening on {host})")
+    ThreadingHTTPServer((host, 8000), Handler).serve_forever()

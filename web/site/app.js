@@ -1,5 +1,6 @@
-// Same-origin when running locally; set the deployed URL printed by CDK (ApiUrl) for production.
-const API = ["localhost", "127.0.0.1"].includes(location.hostname) ? "" : "REPLACE_WITH_API_URL";
+// Set to the deployed ApiUrl from CDK. While it's unset, the page calls the server it was loaded from (local_server.py).
+const DEPLOYED_API = "REPLACE_WITH_API_URL";
+const API = DEPLOYED_API.startsWith("http") ? DEPLOYED_API : "";
 let holdings = [];
 const money = n => new Intl.NumberFormat("en-US", {style:"currency",currency:"USD"}).format(n || 0);
 async function load(prices=true) {
