@@ -17,7 +17,15 @@ from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-FINNHUB_API_KEY = "d0suae9r01qid5qbgqjgd0suae9r01qid5qbgqk0"
+API_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finnhub_api_key.txt")
+try:
+    with open(API_KEY_FILE, encoding="utf-8") as key_file:
+        FINNHUB_API_KEY = key_file.read().strip()
+except FileNotFoundError as exc:
+    raise RuntimeError(f"API key file not found: {API_KEY_FILE}") from exc
+if not FINNHUB_API_KEY:
+    raise RuntimeError(f"API key file is empty: {API_KEY_FILE}")
+
 REQUEST_TIMEOUT = 10  # seconds
 
 class StockDashboard(QWidget):
