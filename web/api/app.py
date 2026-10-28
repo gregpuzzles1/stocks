@@ -28,6 +28,16 @@ def company(symbol):
     articles = [{"headline": a.get("headline"), "url": a.get("url")} for a in (news if isinstance(news, list) else [])[:5] if a.get("headline") and a.get("url")]
     return {"symbol": symbol, "name": profile.get("name"), "logo": profile.get("logo"), "website": profile.get("weburl"), "news": articles}
 
+def watchlist():
+    item = TABLE.get_item(Key={"id": "watchlist"}).get("Item", {"symbols": []})
+    return item.get("symbols", [])
+
+def watch_row(symbol):
+    quote = requests.get("https://finnhub.io/api/v1/quote", params={"symbol": symbol, "token": KEY}, timeout=8).json()
+    price, prev = float(quote.get("c") or 0), float(quote.get("pc") or 0)
+    change = price - prev if price and prev else 0
+    return {"symbol": symbol, "price": price, "change": change, "changePct": change / prev * 100 if prev else 0}
+
 def lambda_handler(event, context):
     method = event["requestContext"]["http"]["method"]
     path = event.get("rawPath", "")
@@ -37,6 +47,14 @@ def lambda_handler(event, context):
         if method == "GET" and path.endswith("/portfolio"):
             rows = [enrich(x) for x in holdings()]
             return response(200, {"holdings": rows, "totalValue": sum(x["value"] for x in rows), "totalProfitLoss": sum(x["profitLoss"] for x in rows)})
+        if method == "GET" and path.endswith("/watchlist"):
+            return response(200, [watch_row(s) for s in watchlist()])
+        if method in ("PUT", "POST") and path.endswith("/watchlist"):
+            data = json.loads(event.get("body") or "[]")
+            if not isinstance(data, list): return response(400, {"error": "Expected a list of symbols"})
+            symbols = list(dict.fromkeys(str(s).strip().upper() for s in data if str(s).strip()))
+            TABLE.put_item(Item={"id": "watchlist", "symbols": symbols})
+            return response(200, symbols)
         if method == "GET" and path.endswith("/company"):
             symbol = (event.get("queryStringParameters") or {}).get("symbol", "").upper()
             return response(200, company(symbol))

@@ -8,14 +8,23 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.join(ROOT, "site")
 DATA = os.path.join(ROOT, "holdings.json")
+WATCH = os.path.join(ROOT, "watchlist.json")
 KEY = os.environ.get("FINNHUB_API_KEY", "")
 
 
-def load():
-    if not os.path.exists(DATA):
+def load(path=DATA):
+    if not os.path.exists(path):
         return []
-    with open(DATA, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def watch_row(symbol):
+    quote = finnhub("quote", symbol)
+    price = float(quote.get("c") or 0)
+    prev = float(quote.get("pc") or 0)
+    change = price - prev if price and prev else 0
+    return {"symbol": symbol, "price": price, "change": change, "changePct": change / prev * 100 if prev else 0}
 
 
 def finnhub(endpoint, symbol):
@@ -78,12 +87,23 @@ class Handler(SimpleHTTPRequestHandler):
             rows = [enrich(x) for x in load()]
             return self.send_json(200, {"holdings": rows, "totalValue": sum(x["value"] for x in rows),
                                         "totalProfitLoss": sum(x["profitLoss"] for x in rows)})
+        if self.path == "/watchlist":
+            return self.send_json(200, [watch_row(s) for s in load(WATCH)])
         if self.path.startswith("/company"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             return self.send_json(200, company(q.get("symbol", [""])[0].upper()))
         super().do_GET()
 
     def do_PUT(self):
+        if self.path == "/watchlist":
+            try:
+                data = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or "[]")
+                symbols = list(dict.fromkeys(str(s).strip().upper() for s in data if str(s).strip()))
+            except (ValueError, TypeError) as exc:
+                return self.send_json(400, {"error": str(exc)})
+            with open(WATCH, "w", encoding="utf-8") as f:
+                json.dump(symbols, f)
+            return self.send_json(200, symbols)
         if self.path != "/holdings":
             return self.send_json(404, {"error": "Not found"})
         try:

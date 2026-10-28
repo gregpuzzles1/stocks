@@ -8,7 +8,7 @@ async function load(prices=true) {
   holdings = prices ? d.holdings : d;
   document.querySelector("#summary").textContent = prices ? `Value: ${money(d.totalValue)} · P/L: ${money(d.totalProfitLoss)}` : "Holdings loaded";
   if (prices) drawPie(holdings); else document.querySelector("#pie").innerHTML = "";
-  document.querySelector("tbody").innerHTML = holdings.map((x,i)=>`<tr><td><a href="#" class="sym" onclick="showInfo('${x.symbol}');return false">${x.symbol}</a></td><td>${x.shares}</td><td>${money(x.cost)}</td><td>${prices?money(x.price):"—"}</td><td>${prices?money(x.value):"—"}</td><td>${prices?money(x.profitLoss):"—"}</td><td><button onclick="removeHolding(${i})">Delete</button></td></tr>`).join("");
+  document.querySelector("tbody").innerHTML = holdings.map((x,i)=>`<tr><td><a href="#" class="sym" onclick="showInfo('${x.symbol}');return false">${x.symbol}</a></td><td>${x.shares}</td><td>${money(x.cost)}</td><td>${prices?money(x.price):"—"}</td><td>${prices?money(x.value):"—"}</td><td class="${x.profitLoss>0?"up":x.profitLoss<0?"down":""}">${prices?money(x.profitLoss):"—"}</td><td><button onclick="removeHolding(${i})">Delete</button></td></tr>`).join("");
 }
 const COLORS = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
 function drawPie(rows) {
@@ -28,8 +28,8 @@ function drawPie(rows) {
 }
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u) ? esc(u) : "#";
-async function showInfo(symbol) {
-  const box = document.querySelector("#info");
+async function showInfo(symbol, target = "#info") {
+  const box = document.querySelector(target);
   box.innerHTML = `<p>Loading news for ${esc(symbol)}…</p>`;
   try {
     const d = await (await fetch(`${API}/company?symbol=${encodeURIComponent(symbol)}`)).json();
@@ -42,3 +42,42 @@ async function showInfo(symbol) {
 async function save(){await fetch(`${API}/holdings`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(holdings)}); await load();}
 document.querySelector("#form").onsubmit=async e=>{e.preventDefault(); let s=symbol.value.toUpperCase(), x={symbol:s,shares:+shares.value,cost:+cost.value}; let i=holdings.findIndex(h=>h.symbol===s); if(i<0) holdings.push(x); else holdings[i]=x; e.target.reset(); await save();};
 async function removeHolding(i){holdings.splice(i,1); await save();} document.querySelector("#refresh").onclick=()=>load(); load();
+
+let watchSymbols = [], watchLoaded = false;
+const signed = n => (n > 0 ? "+" : "") + n.toFixed(2);
+async function loadWatchlist() {
+  const summary = document.querySelector("#watch-summary");
+  summary.textContent = "Loading prices…";
+  try {
+    const rows = await (await fetch(`${API}/watchlist`)).json();
+    watchSymbols = rows.map(x => x.symbol); watchLoaded = true;
+    summary.textContent = rows.length ? `${rows.length} stock${rows.length > 1 ? "s" : ""} watched` : "No stocks on your watchlist yet.";
+    document.querySelector("#watch-body").innerHTML = rows.map(x => {
+      const cls = x.change > 0 ? "up" : x.change < 0 ? "down" : "";
+      return `<tr><td><a href="#" class="sym" onclick="showInfo('${esc(x.symbol)}','#watch-info');return false">${esc(x.symbol)}</a></td><td>${x.price ? money(x.price) : "—"}</td><td class="${cls}">${x.price ? signed(x.change) : "—"}</td><td class="${cls}">${x.price ? signed(x.changePct) + "%" : "—"}</td><td><button onclick="removeWatch('${esc(x.symbol)}')">Remove</button></td></tr>`;
+    }).join("");
+  } catch (e) { summary.textContent = `Error loading watchlist: ${e.message}`; }
+}
+async function saveWatchlist() {
+  await fetch(`${API}/watchlist`, {method: "PUT", headers: {"content-type": "application/json"}, body: JSON.stringify(watchSymbols)});
+  await loadWatchlist();
+}
+document.querySelector("#watch-form").onsubmit = async e => {
+  e.preventDefault();
+  const s = document.querySelector("#watch-symbol").value.trim().toUpperCase();
+  e.target.reset();
+  if (!watchLoaded) await loadWatchlist();
+  if (s && !watchSymbols.includes(s)) { watchSymbols.push(s); await saveWatchlist(); }
+};
+async function removeWatch(s) { watchSymbols = watchSymbols.filter(x => x !== s); await saveWatchlist(); }
+document.querySelector("#watch-refresh").onclick = loadWatchlist;
+function showTab(name) {
+  for (const t of ["portfolio", "watchlist"]) {
+    document.querySelector(`#${t}`).hidden = t !== name;
+    document.querySelector(`#tab-${t}`).classList.toggle("active", t === name);
+  }
+  document.title = name === "watchlist" ? "Watchlist" : "My Portfolio";
+  if (name === "watchlist") loadWatchlist();
+}
+document.querySelector("#tab-portfolio").onclick = () => showTab("portfolio");
+document.querySelector("#tab-watchlist").onclick = () => showTab("watchlist");
