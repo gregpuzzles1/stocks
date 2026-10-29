@@ -1,5 +1,5 @@
 // Set to the deployed ApiUrl from CDK. While it's unset, the page calls the server it was loaded from (local_server.py).
-const DEPLOYED_API = "REPLACE_WITH_API_URL";
+const DEPLOYED_API = "https://n0pjweh7al.execute-api.us-east-1.amazonaws.com";
 const API = DEPLOYED_API.startsWith("http") ? DEPLOYED_API : "";
 let holdings = [];
 const money = n => new Intl.NumberFormat("en-US", {style:"currency",currency:"USD"}).format(n || 0);
